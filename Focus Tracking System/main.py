@@ -345,15 +345,15 @@ class FocusTrackerApp:
                         
                         if self.consecutive_distraction_frames >= self.distraction_threshold:
                             if not self.warning_visible:
-                                print(f"[UYARI] Eşik aşıldı! Uyarı tetikleniyor...")
-                                self.show_warning()
-                                self.alert_manager.trigger_alert()
+                                    print(f"[UYARI] Eşik aşıldı! Uyarı tetikleniyor...")
+                                    self.root.after(0, self.show_warning)
+                                    threading.Thread(target=self.alert_manager.trigger_alert, daemon=True).start()
                     else:
                         if self.consecutive_distraction_frames > 0:
                             print(f"[DEBUG] Odaklanma geri döndü.")
                         self.consecutive_distraction_frames = 0
                         if self.warning_visible:
-                            self.hide_warning()
+                            self.root.after(0, self.hide_warning)
             else:
                 if last_processed_frame is not None:
                     processed_frame = last_processed_frame
@@ -425,45 +425,28 @@ class FocusTrackerApp:
             pass
     
     def show_warning(self):
-        """Uyarı mesajını göster."""
-        with self._state_lock:
-            self.warning_visible = True
-        
-        def _show():
-            try:
-                if hasattr(self, 'warning_frame') and self.warning_frame.winfo_exists():
-                    self.warning_frame.place(relx=0.5, rely=0.5, anchor="center")
-                if hasattr(self, 'status_label') and self.status_label.winfo_exists():
-                    self.status_label.configure(
-                        text="Dikkat dağıldı!",
-                        fg="#D84545"
-                    )
-            except tk.TclError:
-                pass
-        
-        self.root.after(0, _show)
-    
+    """Uyarı mesajını göster (ana thread'de çağrılmalı)."""
+    self.warning_visible = True
+        try:
+            if hasattr(self, 'warning_frame') and self.warning_frame.winfo_exists():
+                self.warning_frame.place(relx=0.5, rely=0.5, anchor="center")
+            if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                self.status_label.configure(text="Dikkat dağıldı!", fg="#D84545")
+        except tk.TclError:
+            pass
+
     def hide_warning(self):
-        """Uyarı mesajını gizle."""
-        with self._state_lock:
-            self.warning_visible = False
+    """Uyarı mesajını gizle (ana thread'de çağrılmalı)."""
+        self.warning_visible = False
+        threading.Thread(target=self.alert_manager.stop_alert, daemon=True).start()
+        try:
+            if hasattr(self, 'warning_frame') and self.warning_frame.winfo_exists():
+                self.warning_frame.place_forget()
+            if hasattr(self, 'status_label') and self.status_label.winfo_exists():
+                self.status_label.configure(text="Odaklanıyorsunuz...", fg="#5A8F5A")
+        except tk.TclError:
+            pass
         
-        self.alert_manager.stop_alert()
-        
-        def _hide():
-            try:
-                if hasattr(self, 'warning_frame') and self.warning_frame.winfo_exists():
-                    self.warning_frame.place_forget()
-                if hasattr(self, 'status_label') and self.status_label.winfo_exists():
-                    self.status_label.configure(
-                        text="Odaklanıyorsunuz...",
-                        fg="#5A8F5A"
-                    )
-            except tk.TclError:
-                pass
-        
-        self.root.after(0, _hide)
-    
     def stop_focus_session(self):
         """Odaklanma oturumunu durdur."""
         with self._state_lock:
