@@ -94,38 +94,34 @@ class AlertManager:
             self._play_system_beep()
         
     def trigger_alert(self):
-        """
-        Uyarıyı tetikle (ses + görsel).
-        Ses sürekli çalar (loop), odak geri gelene kadar.
-        Thread-safe.
-        """
-        with self._lock:
-            self._should_show_warning = True
-            
-            if not self._is_playing:
-                self._play_alert_sound_loop()
+    """Uyarıyı tetikle (ses + görsel). Thread-safe."""
+    should_play = False
+    with self._lock:
+        self._should_show_warning = True
+        if not self._is_playing:
+            self._is_playing = True
+            should_play = True
     
-    def _play_alert_sound_loop(self):
-        """Uyarı sesini sürekli loop modunda çal."""
-        if self._is_playing:
-            return
-            
-        def play_sound():
-            with self._lock:
-                self._is_playing = True
-            
-            try:
-                if PYGAME_AVAILABLE and os.path.exists(self.sound_file):
-                    pygame.mixer.music.load(self.sound_file)
-                    pygame.mixer.music.play(-1)
-                else:
-                    self._play_system_beep()
-            except Exception as e:
-                print(f"Ses çalma hatası: {e}")
+    if should_play:
+        self._start_sound_thread()
+
+def _start_sound_thread(self):
+    """Ses çalma thread'ini başlat (lock almadan)."""
+    def play_sound():
+        try:
+            if PYGAME_AVAILABLE and os.path.exists(self.sound_file):
+                pygame.mixer.music.load(self.sound_file)
+                pygame.mixer.music.play(-1)
+            else:
                 self._play_system_beep()
-        
-        self._sound_thread = threading.Thread(target=play_sound, daemon=True)
-        self._sound_thread.start()
+        except Exception as e:
+            print(f"Ses çalma hatası: {e}")
+            with self._lock:
+                self._is_playing = False
+            self._play_system_beep()
+    
+    self._sound_thread = threading.Thread(target=play_sound, daemon=True)
+    self._sound_thread.start()
     
     def play_alert_sound(self):
         """Uyarı sesini senkron olarak çal."""
